@@ -18,12 +18,15 @@ else
 echo "initialisation"
 
 docker compose  up -d db
-#set -a # automatically export all variables
+#wait for the db to be initialised
+sleep 180
+#load the .env file in your shell to have the access to the env variables
 source .env
 source .env.lightning
-#set +a
+# create the lightning database
 docker compose  run -e  PGPASSWORD=${POSTGRES_PASSWORD} --rm db createdb -h db -U ${POSTGRES_USER}  ${POSTGRES_DB}
 set -e
+# init lighning
 docker compose  run --rm  web mix ecto.migrate
 docker compose  run --rm web mix run imisSetupScripts/imisSetup.exs
 #TODO init opensearch dashboard with API/ manage command
@@ -33,5 +36,8 @@ echo "then go in manage / saved object / import to import the openSearch dashboa
 touch '.init.lock' 
 fi
 docker compose up -d
+#load opensearch dashbooard
+docker compose  exec --rm -e MODE=DEV backend manage upload_opensearch_dashboards --host-domain https://demo.openimis.org --imis-password admin123 
+
 
 
