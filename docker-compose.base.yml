@@ -1,6 +1,10 @@
 #version: "3.7"
 x-api: &default-api
-  image: ghcr.io/openimis/openimis-be:${BE_TAG:-develop}
+  # image: ghcr.io/openimis/openimis-be:${BE_TAG:-develop}
+  image: openimis-be-ml:latest
+  build: 
+    context: ./openimis-be_py/
+    dockerfile: Dockerfile
   environment:
     - DB_DEFAULT=${DB_DEFAULT:-postgresql}
     - DB_HOST=${DB_HOST}
@@ -12,7 +16,7 @@ x-api: &default-api
     - SITE_URL=${DOMAIN}
     - CELERY_BROKER_URL=amqp://rabbitmq
     - MODE=${MODE:-Prod}
-    - CSRF_TRUSTED_ORIGINS=http://localhost
+    - CSRF_TRUSTED_ORIGINS=https://localhost,http://localhost,http://localhost:8000,http://localhost:3000
   volumes:
     - photos:/openimis-be/openIMIS/images/insurees
   depends_on:
@@ -25,7 +29,11 @@ x-api: &default-api
 services:
   frontend:
     container_name: ${PROJECT_NAME:-openimis}-frontend
-    image: ghcr.io/openimis/openimis-fe:${FE_TAG:-develop}
+    # image: ghcr.io/openimis/openimis-fe:${FE_TAG:-develop}
+    image: openimis-fe-ml:latest
+    build: 
+      context: ./openimis-fe_js/
+      dockerfile: Dockerfile
     restart: always
     environment:
       - REACT_APP_API_URL=api
@@ -59,6 +67,8 @@ services:
     restart: always
     networks:
       openimis-net:
+    ports:
+      - 5672:5672
 networks:
   openimis-net:
     name: "${PROJECT_NAME:-openimis}-net"
