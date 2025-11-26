@@ -1,5 +1,9 @@
 x-api: &default-api
-  image: ghcr.io/openimis/openimis-be:${BE_TAG:-develop}
+  # image: ghcr.io/openimis/openimis-be:${BE_TAG:-develop}
+  image: openimis-be-ml:${BE_TAG:-develop}
+  build: 
+    context: ./openimis-be_py/
+    dockerfile: Dockerfile
   environment:
     - DB_DEFAULT=${DB_DEFAULT:-postgresql}
     - DB_HOST=${DB_HOST}
@@ -29,7 +33,11 @@ x-api: &default-api
 
 services:
   frontend:
-    image: ghcr.io/openimis/openimis-fe:${FE_TAG:-develop}
+    # image: ghcr.io/openimis/openimis-fe:${FE_TAG:-develop}
+    image: openimis-fe-ml:${FE_TAG:-develop}
+    build: 
+      context: ./openimis-be_py/
+      dockerfile: Dockerfile
     restart: always
     environment:
       - REACT_APP_API_URL=api
