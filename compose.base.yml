@@ -36,7 +36,7 @@ services:
     # image: ghcr.io/openimis/openimis-fe:${FE_TAG:-develop}
     image: openimis-fe-ml:${FE_TAG:-develop}
     build: 
-      context: ./openimis-be_py/
+      context: ./openimis-fe_js/
       dockerfile: Dockerfile
     restart: always
     environment:
