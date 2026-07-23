@@ -15,6 +15,7 @@ x-api: &default-api
     - SITE_ROOT=api
     - SITE_URL=${DOMAIN}
     - CELERY_BROKER_URL=amqp://rabbitmq
+    - SCHEDULER_AUTOSTART=false
     - MODE=${MODE:-Prod}
     - HOSTS=${HOSTS}
     - CACHE_BACKEND=${CACHE_BACKEND}
@@ -99,6 +100,16 @@ services:
     deploy:
       mode: replicated
       replicas: ${WORKER_REPLICAS:-3}
+  scheduler:
+    <<: *default-api
+    command: scheduler
+    restart: always
+    depends_on:
+      migrations:
+        condition: service_completed_successfully
+    deploy:
+      mode: replicated
+      replicas: 1
   rabbitmq:
     image: rabbitmq:3-management
     restart: always
