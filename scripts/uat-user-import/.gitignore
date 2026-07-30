@@ -1,0 +1,6 @@
+# Real responses contain user-chosen passwords — never commit them.
+users.csv
+servers.csv
+*.csv
+!users.sample.csv
+!servers.sample.csv

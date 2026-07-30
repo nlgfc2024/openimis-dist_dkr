@@ -1,0 +1,6 @@
+team,url,role_ids,district_ids,insecure
+alpha,https://alpha.uat.example.org,,,false
+beta,https://beta.uat.example.org,,,false
+gamma,https://gamma.uat.example.org,,,false
+delta,https://delta.uat.example.org,,,false
+epsilon,http://10.0.0.20:8080,,,false
