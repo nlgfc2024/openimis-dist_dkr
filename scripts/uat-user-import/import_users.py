@@ -143,6 +143,48 @@ def resolve_role_id(client, role_name):
     return resolve_int_id(matches[0]["id"])
 
 
+def _fetch_districts(client):
+    """Page type-D locations (openIMIS 'district' = Malawi TA). Server caps `first` at 100."""
+    nodes, after = [], None
+    while True:
+        data = client.execute(
+            'query($after:String){ locations(type:"D", first:100, after:$after){ '
+            'pageInfo{ hasNextPage endCursor } edges{ node{ id name code } } } }',
+            {"after": after},
+        )
+        conn = data.get("locations") or {}
+        nodes.extend(e["node"] for e in (conn.get("edges") or []))
+        page = conn.get("pageInfo") or {}
+        if not page.get("hasNextPage"):
+            return nodes
+        after = page.get("endCursor")
+
+
+def resolve_district_id(client, name=None):
+    """Resolve a type-D location (district/TA) id by NAME on THIS server, or the first
+    available when no name is given. Assigning one only gives the user a 'home region' so
+    they show in region-scoped admin lists; a national role (e.g. IMIS Administrator) keeps
+    full access regardless."""
+    nodes = _fetch_districts(client)
+    if not nodes:
+        raise RuntimeError("no districts (type-D locations) found on this server.")
+    if name:
+        m = [n for n in nodes if (n.get("name") or "").strip().lower() == name.strip().lower()]
+        if not m:
+            raise RuntimeError(f"district '{name}' not found. Try --list-districts.")
+        return resolve_int_id(m[0]["id"])
+    return resolve_int_id(nodes[0]["id"])  # first available
+
+
+def list_districts(client):
+    nodes = _fetch_districts(client)
+    print(f"{'DISTRICT_ID':<13} {'CODE':<10} NAME")
+    for n in nodes:
+        print(f"{str(resolve_int_id(n.get('id'))):<13} {(n.get('code') or ''):<10} {n.get('name') or ''}")
+    print(f"\n{len(nodes)} districts (type-D / TA). Use a name with --district-name, or let the "
+          f"tool auto-assign the first one.")
+
+
 def user_exists(client, username):
     # 'username' is the exact filter arg (django-filter names the default lookup by the
     # bare field) and a valid output field on UserGQLType. Match case-insensitively.
@@ -375,12 +417,16 @@ def run_multi(args, servers):
         # else resolve by name ('IMIS Administrator') on THIS server.
         try:
             role_ids = srv["role_ids"] or [resolve_role_id(client, args.role_name)]
+            # district: servers.csv override wins; else auto-assign per server unless --no-district.
+            district_ids = srv["district_ids"]
+            if not district_ids and not args.no_district:
+                district_ids = [resolve_district_id(client, args.district_name)]
         except RuntimeError as e:
-            print(f"  [role] FAILED: {e} — skipping this server ({len(team_rows)} users not created).")
+            print(f"  [resolve] FAILED: {e} — skipping this server ({len(team_rows)} users not created).")
             totals["fail"] += len(team_rows)
             continue
-        print(f"  role -> {role_ids} ('{args.role_name}')   district -> {srv['district_ids'] or 'none (optional)'}")
-        o, s, fl = run_server(team, client, team_rows, role_ids, srv["district_ids"], args.language, args.dry_run)
+        print(f"  role -> {role_ids} ('{args.role_name}')   district -> {district_ids or 'none (--no-district)'}")
+        o, s, fl = run_server(team, client, team_rows, role_ids, district_ids, args.language, args.dry_run)
         totals["ok"] += o; totals["skip"] += s; totals["fail"] += fl
 
     routed = sum(len(v) for v in by_team.values())
@@ -399,7 +445,9 @@ def main():
     ap.add_argument("--csv", help="Path to the responses CSV")
     ap.add_argument("--role-name", default="IMIS Administrator", help="Role to assign, looked up by name per server (default 'IMIS Administrator')")
     ap.add_argument("--role-id", type=int, action="append", default=[], help="Explicit role id override (repeatable); skips the name lookup")
-    ap.add_argument("--district-id", type=int, action="append", default=[], help="Optional district (type-D location) id (repeatable). District is NOT required by the backend.")
+    ap.add_argument("--district-id", type=int, action="append", default=[], help="Explicit district (type-D location) id (repeatable). Overrides auto-assign.")
+    ap.add_argument("--district-name", help="District (type-D/TA) to auto-assign by name when none given (default: first available on the server)")
+    ap.add_argument("--no-district", action="store_true", help="Do NOT auto-assign a district (users created district-less won't show in region-scoped admin lists)")
     ap.add_argument("--language", default="en")
     ap.add_argument("--max-username", type=int, default=12, help="Max username length (openIMIS username_code_length, default 12)")
     ap.add_argument("--password-min-length", type=int, default=8, help="Min password length for pre-flight check (default 8)")
@@ -408,6 +456,7 @@ def main():
     ap.add_argument("--insecure", action="store_true", help="Skip TLS verification (self-signed certs)")
     ap.add_argument("--dry-run", action="store_true", help="Validate + report only; create nothing")
     ap.add_argument("--list-roles", action="store_true", help="Print role ids and exit")
+    ap.add_argument("--list-districts", action="store_true", help="Print district (type-D/TA) ids and exit")
     for c in COLS + ("phone",):
         ap.add_argument(f"--col-{c.replace('_','-')}", dest=f"col_{c}", help=f"CSV header for '{c}'")
     args = ap.parse_args()
@@ -434,9 +483,12 @@ def main():
     if args.list_roles:
         list_roles(client)
         return
+    if args.list_districts:
+        list_districts(client)
+        return
 
     if not args.csv:
-        sys.exit("--csv is required (or use --list-roles).")
+        sys.exit("--csv is required (or use --list-roles / --list-districts).")
     colmap = {c: getattr(args, f"col_{c}") for c in COLS + ("phone",) if getattr(args, f"col_{c}")}
     rows = validate(load_rows(args.csv, colmap), args.max_username, args.password_min_length)
 
@@ -447,8 +499,19 @@ def main():
             role_ids = [resolve_role_id(client, args.role_name)]
         except RuntimeError as e:
             sys.exit(f"[role] {e}")
+
+    # District: explicit --district-id wins; else auto-assign one (so users show in the
+    # region-scoped admin grid) unless --no-district. A national role keeps full access.
+    district_ids = list(args.district_id)
+    if not district_ids and not args.no_district:
+        try:
+            district_ids = [resolve_district_id(client, args.district_name)]
+        except RuntimeError as e:
+            sys.exit(f"[district] {e}")
+        print(f"[district] none given — assigning district id {district_ids[0]} so users appear "
+              f"in the admin grid (a national role like IMIS Administrator keeps full access).")
     print(f"[role] using role id(s) {role_ids} for '{args.role_name}'   "
-          f"district -> {args.district_id or 'none (optional)'}")
+          f"district -> {district_ids or 'none (--no-district)'}")
 
     ok = fail = skip = invalid = 0
     print(f"\n{'LINE':<5} {'USERNAME':<14} RESULT")
@@ -471,7 +534,7 @@ def main():
             print(f"{r['_line']:<5} {tag:<14} would CREATE")
             continue
         try:
-            success, err = create_user(client, r, role_ids, args.district_id, args.language)
+            success, err = create_user(client, r, role_ids, district_ids, args.language)
             if success:
                 ok += 1
                 print(f"{r['_line']:<5} {tag:<14} CREATED")

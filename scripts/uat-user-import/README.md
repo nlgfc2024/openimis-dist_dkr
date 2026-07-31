@@ -27,7 +27,25 @@ columns** (or use `--col-*` to map) to exactly:
 | `phone`      | no       | optional |
 
 Everyone gets the **same role** — resolved by **name** (`IMIS Administrator` by default,
-`--role-name`), so the form needs no role question. **District is optional** and not asked.
+`--role-name`), so the form needs no role question. Not asked either: a **district** is
+**auto-assigned** (see below), so the form only needs the columns above.
+
+### District — auto-assigned (why it matters)
+
+The `/front/admin/users` grid filters listed users by **region membership** (`regionIds`).
+A user with **no district belongs to no region and is invisible in that grid** — even though
+a national admin is allowed to see them. So by default the tool **auto-assigns a district**
+to each created user (the first type-D/TA on the server, or `--district-name "<TA>"`), giving
+them a "home region" so they appear.
+
+This is **safe for IMIS Administrator**: the national role keeps full access — verified live,
+a district-assigned IMIS-Admin user still sees all users and all regions; the district only
+adds visibility, it does not restrict.
+
+- `--district-id N` / `servers.csv` `district_ids` — explicit override (wins over auto-assign).
+- `--district-name "<TA>"` — auto-assign a specific TA by name instead of the first one.
+- `--list-districts` — print the type-D/TA ids/names on a server.
+- `--no-district` — opt out entirely (users stay district-less and won't show in the grid).
 
 ### Password requirements (openIMIS default policy)
 
@@ -61,8 +79,9 @@ adjust the pre-flight with `--password-min-length` if a server differs.)
 
 The role defaults to **`IMIS Administrator`**, looked up by name on the server (so a
 different role id per deployment doesn't matter). Override with `--role-name "Some Role"`,
-or force a specific id with `--role-id N`. `--list-roles` prints what's available. District
-is optional — pass `--district-id N` only if you want one.
+or force a specific id with `--role-id N`. `--list-roles` prints what's available. A district
+is **auto-assigned** by default (so users appear in the admin grid — see above); override with
+`--district-id N` / `--district-name "<TA>"`, or opt out with `--no-district`.
 
 `--url` is the deployment base (`http://localhost:8080`, or `https://uat.hyena.malawiubr.org`);
 add `--insecure` only for self-signed certs. Admin credentials come from
@@ -84,9 +103,9 @@ beta,https://beta.uat.example.org,,,false
 ```
 Only `team,url` are required. Leave **`role_ids` blank** to resolve `--role-name`
 (`IMIS Administrator`) on each server — this is the point of name-based lookup, since role
-ids differ per deployment. Leave **`district_ids` blank** to assign none (district is
-optional). Both accept several `;`-separated ids as an override. `insecure=true` skips TLS
-verification for that server.
+ids differ per deployment. Leave **`district_ids` blank** to **auto-assign** a district per
+server (or set `--no-district` to skip). Both accept several `;`-separated ids as an override.
+`insecure=true` skips TLS verification for that server.
 
 Run:
 ```bash
