@@ -98,23 +98,36 @@ def resolve_int_id(node_id):
     return s  # give back whatever we got so the user can see it
 
 
+def _fetch_all_roles(client):
+    """Page through the role connection. The server caps `first` at 100, so we
+    request 100 at a time and follow the Relay cursor until exhausted."""
+    nodes, after = [], None
+    while True:
+        data = client.execute(
+            "query($after:String){ role(first:100, after:$after){ "
+            "pageInfo{ hasNextPage endCursor } edges{ node{ id name isSystem isBlocked } } } }",
+            {"after": after},
+        )
+        conn = data.get("role") or {}
+        nodes.extend(e["node"] for e in (conn.get("edges") or []))
+        page = conn.get("pageInfo") or {}
+        if not page.get("hasNextPage"):
+            return nodes
+        after = page.get("endCursor")
+
+
 def list_roles(client):
-    data = client.execute(
-        "query{ role(first:500){ edges{ node{ id name isSystem isBlocked } } } }"
-    )
-    edges = (data.get("role") or {}).get("edges") or []
+    nodes = _fetch_all_roles(client)
     print(f"{'ROLE_ID':<10} {'NAME':<40} SYSTEM")
-    for e in edges:
-        n = e["node"]
+    for n in nodes:
         print(f"{str(resolve_int_id(n.get('id'))):<10} {(n.get('name') or ''):<40} {n.get('isSystem')}")
-    print(f"\n{len(edges)} roles. Pass one by name with --role-name (default 'IMIS Administrator') "
+    print(f"\n{len(nodes)} roles. Pass one by name with --role-name (default 'IMIS Administrator') "
           f"or an explicit id with --role-id.")
 
 
 def resolve_role_id(client, role_name):
     """Look up a role's integer id by NAME on THIS server (ids differ per deployment)."""
-    data = client.execute("query{ role(first:1000){ edges{ node{ id name isSystem isBlocked } } } }")
-    nodes = [e["node"] for e in ((data.get("role") or {}).get("edges") or [])]
+    nodes = _fetch_all_roles(client)
     matches = [n for n in nodes
                if (n.get("name") or "").strip().lower() == role_name.strip().lower()
                and not n.get("isBlocked")]
