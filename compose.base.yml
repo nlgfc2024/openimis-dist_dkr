@@ -25,6 +25,7 @@ x-api: &default-api
     - OPENSEARCH_PASSWORD=${OPENSEARCH_PASSWORD}
     - OPENSEARCH_HOSTS=${OPENSEARCH_HOSTS}
     - CSRF_TRUSTED_ORIGINS=${CSRF_TRUSTED_ORIGINS}
+    - USER_AGENT_CSRF_BYPASS=${USER_AGENT_CSRF_BYPASS:-}
   volumes:
     - photos:/openimis-be/openIMIS/images/insurees
   depends_on:
