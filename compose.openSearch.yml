@@ -1,7 +1,8 @@
 services:
 
   opensearch:
-    image: opensearchproject/opensearch:latest
+    image: opensearchproject/opensearch:${OPENSEARCH_VERSION:-3.9.0}
+    restart: always
     env_file:
       - ".env.openSearch"
     environment:
@@ -11,6 +12,7 @@ services:
       - "plugins.security.ssl.http.enabled=${SLL_HTTP_ENABLED:-false}"
       - "plugins.security.disabled=true"
       - "OPENSEARCH_INITIAL_ADMIN_PASSWORD=${OPENSEARCH_PASSWORD}"
+      - "OPENSEARCH_JAVA_OPTS=${OPENSEARCH_JAVA_OPTS:--Xms1g -Xmx1g}"
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:9200/_cluster/health || exit 1"]
       interval: 30s
@@ -23,14 +25,13 @@ services:
       openimis-net:
 
   opensearch-dashboards:
-    image: opensearchproject/opensearch-dashboards:latest
+    image: opensearchproject/opensearch-dashboards:${OPENSEARCH_VERSION:-3.9.0}
+    restart: always
     environment:
       - OPENSEARCH_HOSTS=${OPENSEARCH_HOSTS:-http://opensearch:9200}
       - "DISABLE_SECURITY_DASHBOARDS_PLUGIN=true"
       - SERVER_BASEPATH=/opensearch
       - SERVER_REWRITEBASEPATH=true
-    volumes:
-      - "./conf/opensearch/opensearch.yml:/usr/share/opensearch-dashboards/config/opensearch.yml"
     networks:
       openimis-net:
 
